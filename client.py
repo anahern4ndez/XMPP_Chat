@@ -7,7 +7,7 @@ from OpenSSL import SSL
 
 class Client(sleekxmpp.ClientXMPP):
 
-    def __init__(self, jid, password):
+    def __init__(self, jid, password, recipient, msg):
         sleekxmpp.ClientXMPP.__init__(self, jid, password)
 
         self.add_event_handler("session_start", self.session_start)
@@ -25,6 +25,8 @@ class Client(sleekxmpp.ClientXMPP):
         import ssl
         # self.ssl_version = ssl.PROTOCOL_SSLv23
         self.ssl_version = ssl.PROTOCOL_TLS
+        self.msg = msg
+        self.recipient = recipient
 
     def session_start(self, event):
         self.send_presence()
@@ -43,19 +45,30 @@ class Client(sleekxmpp.ClientXMPP):
             logging.error('Server is taking too long to respond')
             self.disconnect()
 
-    def message(self, recipient, msg):
-        # if msg['type'] in ('chat', 'normal'):
-        #     msg.reply("Thanks for sending\n%(body)s" % msg).send()
-        self.send_message(mto=self.recipient + "@redes2020.xzy",
-                          mbody=self.msg,
-                          mtype='chat')
+        self.sendMessage(self.recipient, self.msg)
 
+    def message(self, msg):
+        if msg['type'] in ('chat', 'normal'):
+        #     msg.reply("Thanks for sending\n%(body)s" % msg).send()
+            print("Message received: ", msg)
+
+    def disconnect_user(self):
+        # Using wait=True ensures that the send queue will be
+        # emptied before ending the session.
+        print("Disconnecting...")
+        self.disconnect(wait=True)
+
+    def sendMessage(self, recipient, msg):
+        self.send_message(mto=recipient,
+                          mbody=msg,
+                          mtype='chat')
+        
 
 if __name__ == '__main__':
     """ 
         User Register 
     """
-    # username = "ana@redes2020.xyz"
+    # username = "ana_hernandez@redes2020.xyz"
     # password = "hola"
     # jid = xmpp.JID(username)
     # xmpp_cli = xmpp.Client(jid.getDomain())
@@ -70,21 +83,24 @@ if __name__ == '__main__':
     """ 
         User sign in 
     """
-    # Ideally use optparse or argparse to get JID,
-    # password, and log level.
+    # # Ideally use optparse or argparse to get JID,
+    # # password, and log level.
 
     logging.basicConfig(level=logging.DEBUG,
                         format='%(levelname)-8s %(message)s')
 
-    # username = input("Ingrese el nombre de usuario: ")
-    # password = input("Ingrese la password: ")
-    # xmpp = Client(username+'@redes2020.xyz', password)
-    username = "ana"
-    password = "hola"
-    xmpp_cli = Client(username+'@redes2020.xyz', password)
-    xmpp_cli.connect()
-    xmpp_cli.process(block=True)
+    username = input("Ingrese el nombre de usuario: ")
+    password = input("Ingrese la password: ")
+    # # xmpp = Client(username+'@redes2020.xyz', password)
+    # username = "ana"
+    # password = "hola"
+    # xmpp_cli.process(block=True)
 
     msg = input("ingrese mensaje a enviar: ")
     recipient = input("ingrese username del recipiente: ")
-    xmpp_cli.send_message(recipient, msg)
+    xmpp_cli = Client(username+'@redes2020.xyz', password, recipient, msg)
+    xmpp_cli.connect()
+    xmpp_cli.sendMessage(recipient, msg)
+    # Using wait=True ensures that the send queue will be
+    # emptied before ending the session.
+    xmpp_cli.disconnect_user()
