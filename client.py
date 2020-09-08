@@ -115,22 +115,23 @@ class Client(sleekxmpp.ClientXMPP):
             # raise Exception("Deleting failed.")
         except IqTimeout:
             raise Exception("Unable to reach server.")
-
-if __name__ == '__main__':
+def user_register(username, password):
     """ 
         User Register 
     """
     # username = "anah@redes2020.xyz"
     # password = "hola"
-    # jid = xmpp.JID(username)
-    # xmpp_cli = xmpp.Client(jid.getDomain())
-    # xmpp_cli.connect()
-    # if xmpp.features.register(xmpp_cli,jid.getDomain(),{'username':jid.getNode(),'password':password}):
-    #     sys.stderr.write('Success\n')
-    #     sys.exit(0)
-    # else:
-    #     sys.stderr.write('Error\n')
-    #     sys.exit(1)
+    jid = xmpp.JID(username)
+    xmpp_cli = xmpp.Client(jid.getDomain())
+    xmpp_cli.connect()
+    if xmpp.features.register(xmpp_cli,jid.getDomain(),{'username':jid.getNode(),'password':password}):
+        sys.stderr.write('Success\n')
+        sys.exit(0)
+    else:
+        sys.stderr.write('Error\n')
+        sys.exit(1)
+
+def user_login(username, password):
 
     """ 
         User sign in 
@@ -148,7 +149,6 @@ if __name__ == '__main__':
     # username = "ana"
     # password = "hola")
     xmpp_cli = Client(username+'@redes2020.xyz', password)
-    xmpp_cli.delete_user()
 
     # msg = input("ingrese mensaje a enviar: ")
     # recipient = input("ingrese username del recipiente: ")
@@ -158,20 +158,4 @@ if __name__ == '__main__':
     # emptied before ending the session.
     # xmpp_cli.delete_user()
     # xmpp_cli.disconnect_user()
-
-    """
-        User unregister 
-    """
-    # username = "anah@redes2020.xyz"
-    # password = "hola"
-    # jid = xmpp.JID(username)
-    # xmpp_cli = xmpp.Client(jid.getDomain())
-    # xmpp_cli.connect()
-    # # xmpp_cli.auth(jid.node, password, jid.resource)
-    # if xmpp.features.unregister(xmpp_cli,""):
-    #     sys.stderr.write('Successfully deleted user.\n')
-    #     sys.exit(0)
-    # else:
-    #     sys.stderr.write('Error\n')
-    #     sys.exit(1)
-
+    return xmpp_cli
