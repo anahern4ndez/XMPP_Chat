@@ -37,7 +37,16 @@ while True:
                     # 100% funcional
                     user_client.delete_user()
                     user_client.disconnect_user()
+                elif inop == "3":
+                    contacts = user_client.get_my_contacts()
+                    print("\nMis contactos:", contacts)
+                elif inop == "4":
+                    new_contact = input("Ingrese el username del usuario a agregar (SIN dominio): ")+"@redes2020.xyz"
+                    user_client.add_contact(new_contact)
+                elif inop == "10":
+                    user_client.get_all_users()
                 elif inop =="11":
+                    # 100% funcional
                     user_client.disconnect_user()
                     break
         else:
