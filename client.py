@@ -7,7 +7,7 @@ import ssl
 import xml.etree.ElementTree as ET
 from sleekxmpp.xmlstream.stanzabase import multifactory, ElementBase
 from sleekxmpp.xmlstream.tostring import tostring
-
+import base64
 
 
 class Client(sleekxmpp.ClientXMPP):
@@ -26,15 +26,16 @@ class Client(sleekxmpp.ClientXMPP):
         self.add_event_handler("got_offline", self.contact_sign_out)
         self.add_event_handler("presence_unavailable", self.contact_sign_out)
         self.add_event_handler("got_online", self.contact_sign_in)
+        self.add_event_handler("groupchat_message", self.receive_message)
         # self.add_event_handler("presence_subscribed", self.added_contact) # server envia mensaje de add contact success
         # self.add_event_handler("presence_subscribe", self.on_auth_success)
         
         # If you wanted more functionality, here's how to register plugins:
         self.register_plugin('xep_0030') # Service Discovery
         self.register_plugin('xep_0199') # XMPP Ping
-        self.register_plugin('xep_0077') # in band registration
         self.register_plugin('xep_0050')
         self.register_plugin('xep_0133')
+        self.register_plugin('xep_0045') # MUC
 
 
         # If you are working with an OpenFire server, you will
@@ -54,6 +55,7 @@ class Client(sleekxmpp.ClientXMPP):
             # parse del roster para obtener estado de los contactos 
             for contact in self.client_roster.keys():
                 self.my_contacts[JID(contact).bare] = "Offline"
+
         except IqError as err:
             logging.error('There was an error getting the roster')
             logging.error(err.iq['error']['condition'])
@@ -75,21 +77,21 @@ class Client(sleekxmpp.ClientXMPP):
         if message['type'] in ('chat', 'normal'):
             from_account = "%s@%s" % (message['from'].user, message['from'].domain)
             print("Message received '%s' from %s" % (message["body"], from_account))
+        # elif message['type'] == 'groupchat':
+        #     print("gc msg", message)
+        #     from_account = "%s@%s" % (message['from'].user, message['from'].domain)
+        #     print("Message received '%s' from %s @ " % (message["body"], from_account))
+        elif message['type'] == "image":
+            received = message['body'].encode('utf-8')
+            received = base64.decodebytes(received)
+            with open("received_img.png", "wb") as fh:
+                fh.write(received)
 
-            # if self.instance_name in message['body'].lower():
-            #     print("Caught test message: %s" % message)
-            #     # message.reply("%s was listening!" % self.instance_name).send()
-            # else:
-            #     print("Uncaught command from %s: %s" % (from_account, message['body']))
+
     def add_contact(self, contact_username):
         self.send_presence_subscription(contact_username)
-        # print("subs stanza", JID(contact_username).bare)
-        # self.update_roster(JID(contact_username).bare, subscription='both')
 
     def get_my_contacts(self):
-        # self.send_presence()
-        # my_roster = self.get_roster(block = True, timeout = 3)
-        # print("roster contacts", self.client_roster)
         contacts_state = ["Username: {}, Estado: {}".format(username, state) for username,state in self.my_contacts.items()]
         to_str = '\n'
         for i in range(len(contacts_state)):
@@ -139,9 +141,6 @@ class Client(sleekxmpp.ClientXMPP):
         self.logged_in = 0
     
     def get_all_users(self):
-        # print("all users on server",self['xep_0030'].get_info('search.redes2020.xyz'))
-        # # print("get commands", self['xep_0133'].get_commands('redes2020.xyz'))
-        # print("2all users on server",self['xep_0050'].send_command('search.redes2020.xyz', 'http://jabber.org/protocol/admin#get_registered_users_list'))
         users = ""
         iq = self.make_iq(
             id="get_all_registered_users", ito="search.redes2020.xyz")
@@ -161,9 +160,7 @@ class Client(sleekxmpp.ClientXMPP):
             </query>\
         ')
         request = self.make_iq_set(iq = iq, sub=get_users_form)
-        # print("requesst", request)
         try:
-            users = ""
             response = request.send(now=True)
             users = self.parse_users_response(response)
             return users
@@ -171,9 +168,44 @@ class Client(sleekxmpp.ClientXMPP):
             print("Query failed.", e)
         except IqTimeout:
             raise Exception("Unable to reach server.")
-        # except:
-        #     sys.exit(1)
         
+    def get_user_info(self, search, username, email, name):
+        iq = self.make_iq(
+            id="get_one_user_info", ito="search.redes2020.xyz")
+        query_str = '\
+            <query xmlns="jabber:iq:search">\
+                <x xmlns="jabber:x:data" type="form">\
+                    <field var="FORM_TYPE" type="hidden">\
+                        <value>jabber:iq:search</value>\
+                    </field>'
+        if username:
+            query_str += '<field var="Username">\
+                                <value>1</value>\
+                        </field>'
+        if email:
+            query_str += '<field var="Email">\
+                                <value>1</value>\
+                        </field>'
+        if name:
+            query_str += '<field var="Name">\
+                                <value>1</value>\
+                        </field>'
+        query_str += '<field var="search">\
+                        <value>{}</value>\
+                    </field>\
+                </x>\
+            </query>\
+        '.format(search)
+        get_users_form = ET.fromstring(query_str)
+        request = self.make_iq_set(iq = iq, sub=get_users_form)
+        try:
+            response = request.send(now=True)
+            return self.parse_users_response(response)
+        except IqError as e:
+            print("Query failed.", e)
+        except IqTimeout:
+            raise Exception("Unable to reach server.")
+
     def parse_users_response(self, response):
         users_str = ""
         user_count = 1
@@ -183,12 +215,27 @@ class Client(sleekxmpp.ClientXMPP):
             fields = item.findall(".//{jabber:x:data}field")
             for field in fields:
                 field_value = field.getchildren()[0].text
-                if field_value:
+                if field_value: # si el field tiene valor alguno, que se agregue al print
                     users_str += "{}: {}\t".format(field.attrib["var"], field_value)
             users_str += "\n"
             user_count += 1
         return users_str
-
+    
+    def send_msg_to_room(self, room, msg):
+        self.send_message(mto=room, mbody=msg, mtype='groupchat')
+    
+    def join_group(self, room, nickname=None):
+        print("all services on server",self['xep_0030'].get_info('conference.redes2020.xyz'))
+        if not nickname:
+            nickname = self.instance_name.split("@")[0]
+        self.plugin['xep_0045'].joinMUC(room, nickname, wait=True)
+        self.plugin['xep_0045'].setAffiliation(room,nickname,affiliation='owner')
+    
+    def send_file(self, filename, recipient):
+        message = ''
+        with open(filename, "rb") as img_file:
+            message = base64.b64encode(img_file.read()).decode('utf-8')
+        self.send_message(mto=recipient,mbody=message,mtype="chat")
 
 def user_register(username, password):
     """ 
@@ -199,10 +246,8 @@ def user_register(username, password):
     xmpp_cli.connect()
     if xmpp.features.register(xmpp_cli,jid.getDomain(),{'username':jid.getNode(),'password':password}):
         print('Successfully registered new user. \n')
-        # sys.exit(0)
     else:
         print('Error registering user.\n')
-        # sys.exit(1)
 
 def user_login(username, password):
 
@@ -210,8 +255,7 @@ def user_login(username, password):
         User sign in 
     """
     xmpp_client = Client(username, password)
-    # do while
-    # await ??
+    # esperar a que el cliente haya hecho log in correctamente 
     while xmpp_client.logged_in == -1:
         pass
     if xmpp_client.logged_in == 0:
