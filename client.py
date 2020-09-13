@@ -5,6 +5,8 @@ from sleekxmpp.exceptions import IqError, IqTimeout
 from sleekxmpp.xmlstream import XMLStream, JID
 import ssl
 import xml.etree.ElementTree as ET
+from sleekxmpp.xmlstream.stanzabase import multifactory, ElementBase
+from sleekxmpp.xmlstream.tostring import tostring
 
 
 
@@ -34,13 +36,11 @@ class Client(sleekxmpp.ClientXMPP):
         self.register_plugin('xep_0050')
         self.register_plugin('xep_0133')
 
-        # Here's how to access plugins once you've registered them:
-        # self['xep_0030'].add_feature('echo_demo')
 
         # If you are working with an OpenFire server, you will
         # need to use a different SSL version:
-        # self.ssl_version = ssl.PROTOCOL_SSLv23
         self.ssl_version = ssl.PROTOCOL_TLS
+
         if self.connect():
             print("Opened XMPP Connection")
             self.process(block=False)
@@ -48,11 +48,6 @@ class Client(sleekxmpp.ClientXMPP):
             raise Exception("Unable to connect to server.")
 
     def session_start(self, event):
-        # print(self.get_roster())
-
-        # Most get_*/set_* methods from plugins use Iq stanzas, which
-        # can generate IqError and IqTimeout exceptions
-        
         try:
             self.send_presence()
             self.get_roster(block = True, timeout = 3)
@@ -66,8 +61,6 @@ class Client(sleekxmpp.ClientXMPP):
         except IqTimeout:
             logging.error('Server is taking too long to respond')
             self.disconnect()
-
-        # self.sendMessage(self.recipient, self.msg)
 
     def send_msg(self, recipient, body):
         message = self.Message()
@@ -146,19 +139,56 @@ class Client(sleekxmpp.ClientXMPP):
         self.logged_in = 0
     
     def get_all_users(self):
-        print("all users on server",self['xep_0030'].get_info('search.redes2020.xyz'))
+        # print("all users on server",self['xep_0030'].get_info('search.redes2020.xyz'))
         # # print("get commands", self['xep_0133'].get_commands('redes2020.xyz'))
         # print("2all users on server",self['xep_0050'].send_command('search.redes2020.xyz', 'http://jabber.org/protocol/admin#get_registered_users_list'))
-        request = self.make_iq(id="get_all_registered_users", itype="get", iquery="jabber:iq:search")
-        print(request)
+        users = ""
+        iq = self.make_iq(
+            id="get_all_registered_users", ito="search.redes2020.xyz")
+        get_users_form = ET.fromstring('\
+            <query xmlns="jabber:iq:search">\
+                <x xmlns="jabber:x:data" type="form">\
+                    <field var="FORM_TYPE" type="hidden">\
+                        <value>jabber:iq:search</value>\
+                    </field>\
+                    <field var="Username">\
+                        <value>1</value>\
+                    </field>\
+                    <field var="search">\
+                        <value>*</value>\
+                    </field>\
+                </x>\
+            </query>\
+        ')
+        request = self.make_iq_set(iq = iq, sub=get_users_form)
+        # print("requesst", request)
         try:
-            request.send(now=True)
-            print("User successfully deleted")
+            users = ""
+            response = request.send(now=True)
+            users = self.parse_users_response(response)
+            return users
         except IqError as e:
-            print("Deleting failed.", e)
-            # raise Exception("Deleting failed.")
+            print("Query failed.", e)
         except IqTimeout:
             raise Exception("Unable to reach server.")
+        # except:
+        #     sys.exit(1)
+        
+    def parse_users_response(self, response):
+        users_str = ""
+        user_count = 1
+        user_items = response.find('.//{jabber:x:data}x').findall(".//{jabber:x:data}item")
+        for item in user_items:
+            users_str += "\t" + str(user_count) + ". "
+            fields = item.findall(".//{jabber:x:data}field")
+            for field in fields:
+                field_value = field.getchildren()[0].text
+                if field_value:
+                    users_str += "{}: {}\t".format(field.attrib["var"], field_value)
+            users_str += "\n"
+            user_count += 1
+        return users_str
+
 
 def user_register(username, password):
     """ 

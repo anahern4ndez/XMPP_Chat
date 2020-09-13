@@ -10,11 +10,14 @@ logging.basicConfig(level=logging.DEBUG,
 while True:
     print("Ingrese la acción que desea realizar: \n\t1. Registrarse \n\t2. Iniciar sesión. \n\t3. Salir.")
     opcion = input("> ")
+    # opcion = "2"
     if opcion == "3":
         print("Bye!")
         break
-    username = input("Ingrese el nombre de usuario (SIN dominio): ")+"@redes2020.xyz"
-    password = input("Ingrese la contraseña de usuario: ")
+    # username = input("Ingrese el nombre de usuario (SIN dominio): ")+"@redes2020.xyz"
+    # password = input("Ingrese la contraseña de usuario: ")
+    username = "anah@redes2020.xyz"
+    password = "hola"
     if opcion == "1":
         user_register(username, password)
     elif opcion == "2":
