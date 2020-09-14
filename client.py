@@ -77,10 +77,10 @@ class Client(sleekxmpp.ClientXMPP):
         if message['type'] in ('chat', 'normal'):
             from_account = "%s@%s" % (message['from'].user, message['from'].domain)
             print("Message received '%s' from %s" % (message["body"], from_account))
-        # elif message['type'] == 'groupchat':
-        #     print("gc msg", message)
-        #     from_account = "%s@%s" % (message['from'].user, message['from'].domain)
-        #     print("Message received '%s' from %s @ " % (message["body"], from_account))
+        elif message['type'] == 'groupchat':
+            from_group = message["from"].user
+            from_account = message["from"].resource
+            print("Message received! %s @ %s : %s " % (from_account, from_group, message["body"]))
         elif message['type'] == "image":
             received = message['body'].encode('utf-8')
             received = base64.decodebytes(received)
@@ -225,7 +225,6 @@ class Client(sleekxmpp.ClientXMPP):
         self.send_message(mto=room, mbody=msg, mtype='groupchat')
     
     def join_group(self, room, nickname=None):
-        print("all services on server",self['xep_0030'].get_info('conference.redes2020.xyz'))
         if not nickname:
             nickname = self.instance_name.split("@")[0]
         self.plugin['xep_0045'].joinMUC(room, nickname, wait=True)
