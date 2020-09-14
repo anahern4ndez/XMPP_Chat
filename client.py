@@ -1,7 +1,7 @@
 import logging
 import xmpp, sys
 import sleekxmpp
-from sleekxmpp.exceptions import IqError, IqTimeout
+from sleekxmpp.exceptions import IqError, IqTimeout, XMPPError
 from sleekxmpp.xmlstream import XMLStream, JID
 import ssl
 import xml.etree.ElementTree as ET
@@ -222,13 +222,18 @@ class Client(sleekxmpp.ClientXMPP):
         return users_str
     
     def send_msg_to_room(self, room, msg):
-        self.send_message(mto=room, mbody=msg, mtype='groupchat')
+        try:
+            response = self.send_message(mto=room, mbody=msg, mtype='groupchat')
+            print("send msg response", response)
+        except XMPPError:
+            self.join_group(room)
+            self.send_message(mto=room, mbody=msg, mtype='groupchat')
     
     def join_group(self, room, nickname=None):
         if not nickname:
             nickname = self.instance_name.split("@")[0]
         self.plugin['xep_0045'].joinMUC(room, nickname, wait=True)
-        self.plugin['xep_0045'].setAffiliation(room,nickname,affiliation='owner')
+        # self.plugin['xep_0045'].setAffiliation(room,nickname,affiliation='owner')
     
     def send_file(self, filename, recipient):
         message = ''
