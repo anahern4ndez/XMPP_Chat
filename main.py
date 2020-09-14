@@ -34,7 +34,7 @@ while True:
                 if inop == "1":
                     # 100% funcional
                     msg = input("Ingrese mensaje a enviar: ")
-                    recipient = input("Ingrese el username del usuario recipiente: ")+"@redes2020.xyz"
+                    recipient = input("Ingrese el username del usuario recipiente (SIN dominio): ")+"@redes2020.xyz"
                     user_client.send_msg(recipient, msg)
                 elif inop == "2":
                     # 100% funcional
@@ -66,11 +66,12 @@ while True:
                     else:
                         print("No se han encontrado usuarios con esa información.")
                 elif inop == "6":
-                    gc_name = input("Ingrese el nombre del grupo: ") + "@conference.redes2020.xyz"
-                    # send_msg_to_room()
-                    user_client.join_group(gc_name)
+                    gc_name = input("Ingrese el nombre del grupo (SIN dominio): ") + "@conference.redes2020.xyz"
+                    nick = input("Si desea un nombre en el chatroom diferente a su username, ingréselo ahora (enter para obviar): ")
+                    user_client.join_group(gc_name, nick)
                 elif inop == "7":
-                    gc = input("Ingrese el grupo a enviar el mensaje: ")
+                    # 100% funcional
+                    gc = input("Ingrese el grupo a enviar el mensaje (SIN dominio): ")+ "@conference.redes2020.xyz"
                     msg = input("Ingrese mensaje a enviar: ")
                     user_client.send_msg_to_room(gc, msg)
                 elif inop == "10":
