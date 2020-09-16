@@ -27,6 +27,7 @@ class Client(sleekxmpp.ClientXMPP):
         self.add_event_handler("presence_unavailable", self.contact_sign_out)
         self.add_event_handler("got_online", self.contact_sign_in)
         self.add_event_handler("groupchat_message", self.receive_message)
+        self.add_event_handler("roster_update", self.roster_update)
         # self.add_event_handler("presence_subscribed", self.added_contact) # server envia mensaje de add contact success
         # self.add_event_handler("presence_subscribe", self.on_auth_success)
         
@@ -37,7 +38,6 @@ class Client(sleekxmpp.ClientXMPP):
         self.register_plugin('xep_0133')
         self.register_plugin('xep_0045') # MUC
 
-
         # If you are working with an OpenFire server, you will
         # need to use a different SSL version:
         self.ssl_version = ssl.PROTOCOL_TLS
@@ -47,12 +47,30 @@ class Client(sleekxmpp.ClientXMPP):
             self.process(block=False)
         else:
             raise Exception("Unable to connect to server.")
+    
+    def roster_update(self, event):
+        print("contacts in client roster", self.client_roster)
+        # se agrega un usuario que no estaba en mis contactos
+        for contact in self.client_roster.keys():
+            # if event['from'].user != "@conference.redes2020.xyz" and event['from'].user != self.instance_name:
+            contactjid = JID(contact)
+            print("contact user", contactjid.user, contactjid, contactjid.domain)
+            if (contactjid.bare not in self.my_contacts.keys()) and (contactjid.domain != "conference.redes2020.xyz") and (contactjid.bare != self.instance_name):
+                self.my_contacts[contactjid.bare] = "Offline"
+        # se verifica si algun usuario se eliminó y se actualiza la lista de acorde
+        deleted_clients = []
+        for mycontact in self.my_contacts.keys():
+            if mycontact not in self.client_roster.keys():
+                deleted_clients.append(mycontact)
+        for delc in deleted_clients:
+            del self.my_contacts[delc]
 
     def session_start(self, event):
         try:
             self.send_presence()
-            self.get_roster(block = True, timeout = 3)
+            self.get_roster(block = True, timeout = 5)
             # parse del roster para obtener estado de los contactos 
+            print("contacts in client roster", self.client_roster)
             for contact in self.client_roster.keys():
                 self.my_contacts[JID(contact).bare] = "Offline"
 
@@ -86,7 +104,6 @@ class Client(sleekxmpp.ClientXMPP):
             received = base64.decodebytes(received)
             with open("received_img.png", "wb") as fh:
                 fh.write(received)
-
 
     def add_contact(self, contact_username):
         self.send_presence_subscription(contact_username)
@@ -125,13 +142,16 @@ class Client(sleekxmpp.ClientXMPP):
             # raise Exception("Deleting failed.")
         except IqTimeout:
             raise Exception("Unable to reach server.")
+    
     def contact_sign_out(self, event):
         contact = JID(event['from']).bare
         if contact in self.my_contacts.keys(): # se hace esto porque los eventos presence_unavailable también pueden venir del server
             self.my_contacts[contact] = "Offline"
         
     def contact_sign_in(self, event):
-        self.my_contacts[JID(event['from']).bare] = "Online"
+        # print("resource?", event['from'].user, "from", event['from'])
+        if event['from'].domain != "conference.redes2020.xyz" and event['from'].user != self.instance_name: # si el presence no viene de un group chat 
+            self.my_contacts[JID(event['from']).bare] = "Online"
 
     def on_failed_auth(self, event):
         print("auth fail event", event)
@@ -151,6 +171,12 @@ class Client(sleekxmpp.ClientXMPP):
                         <value>jabber:iq:search</value>\
                     </field>\
                     <field var="Username">\
+                        <value>1</value>\
+                    </field>\
+                    <field var="Email">\
+                        <value>1</value>\
+                    </field>\
+                    <field var="Name">\
                         <value>1</value>\
                     </field>\
                     <field var="search">\
@@ -222,18 +248,20 @@ class Client(sleekxmpp.ClientXMPP):
         return users_str
     
     def send_msg_to_room(self, room, msg):
-        try:
-            response = self.send_message(mto=room, mbody=msg, mtype='groupchat')
-            print("send msg response", response)
-        except XMPPError:
+        if room not in self.plugin['xep_0045'].getJoinedRooms():
             self.join_group(room)
-            self.send_message(mto=room, mbody=msg, mtype='groupchat')
+        self.send_message(mto=room, mbody=msg, mtype='groupchat')
+        # print("Joined rooms:", self.plugin['xep_0045'].getJoinedRooms())
     
     def join_group(self, room, nickname=None):
         if not nickname:
             nickname = self.instance_name.split("@")[0]
         self.plugin['xep_0045'].joinMUC(room, nickname, wait=True)
-        # self.plugin['xep_0045'].setAffiliation(room,nickname,affiliation='owner')
+        if room not in self.plugin['xep_0045'].getJoinedRooms():
+            print("Failed to join room.")
+            return
+        print("Joined rooms:", ", ".join(list(self.plugin['xep_0045'].getJoinedRooms())))
+        # self.plugin['xep_0045'].setAffiliation(room,nickname,affiliation='member')
     
     def send_file(self, filename, recipient):
         message = ''
