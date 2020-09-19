@@ -27,7 +27,7 @@ while True:
             while True:
                 print("Ingrese la acción que desea realizar: \
                     \n\t1. Enviar un mensaje a alguien \n\t2. Mostrar a todos los usuarios existentes \n\t3. Mostrar todos mis contactos y su estado \n\t4. Agregar a alguien a mis contactos\
-                    \n\t5. Mostrar detalles de un usuario \n\t6. Crear/unirse a un grupo \n\t7. Enviar mensaje a un grupo existente \n\t8. Definir mensaje de presencia. \
+                    \n\t5. Mostrar detalles de un usuario \n\t6. Crear/unirse a un grupo \n\t7. Enviar mensaje a un grupo \n\t8. Definir mensaje de presencia. \
                     \n\t9. Enviar una notificación. \n\t10. Enviar un archivo \n\t11. Eliminar usuario\
                     \n\t12. Cerrar sesión.")
                 inop = input("> ")
@@ -66,15 +66,24 @@ while True:
                     else:
                         print("No se han encontrado usuarios con esa información.")
                 elif inop == "6":
+                    # 100% funcional
                     gc_name = input("Ingrese el nombre del grupo (SIN dominio): ") + "@conference.redes2020.xyz"
                     nick = input("Si desea un nombre en el chatroom diferente a su username, ingréselo ahora (enter para obviar): ")
                     user_client.join_group(gc_name, nick)
                 elif inop == "7":
+                    # 100% funcional
                     gc = input("Ingrese el grupo a enviar el mensaje (SIN dominio): ")+ "@conference.redes2020.xyz"
                     msg = input("Ingrese mensaje a enviar: ")
                     user_client.send_msg_to_room(gc, msg)
+                elif inop == "8":
+                    new_status = input("Ingrese el nuevo mensaje a enviar con el presence: ")
+                    user_client.update_presence(new_status)
                 elif inop == "10":
-                    user_client.send_file("./chavo_x.png", "mafprueba@redes2020.xyz")
+                    recipient = input("Ingrese el usuario a recibir el archivo (SIN dominio): ")+"@redes2020.xyz"
+                    # filename = input("Ingrese nombre del archivo: ")
+                    filename = "./test_img.png"
+                    user_client.send_file(filename,recipient)
+                    # user_client.send_file()
                 elif inop == "11":
                     # 100% funcional
                     user_client.delete_user()

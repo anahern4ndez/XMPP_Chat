@@ -18,6 +18,7 @@ class Client(sleekxmpp.ClientXMPP):
         self.instance_name = jid
         self.latest_roster_version = -1
         self.my_contacts = {}
+        self.contacts_jids = []
 
         self.add_event_handler("session_start", self.session_start, threaded=False, disposable=True)
         self.add_event_handler("message", self.receive_message, threaded=True, disposable=False)
@@ -28,6 +29,7 @@ class Client(sleekxmpp.ClientXMPP):
         self.add_event_handler("got_online", self.contact_sign_in)
         self.add_event_handler("groupchat_message", self.receive_message)
         self.add_event_handler("roster_update", self.roster_update)
+        self.add_event_handler("changed_status", self.changed_status)
         # self.add_event_handler("presence_subscribed", self.added_contact) # server envia mensaje de add contact success
         # self.add_event_handler("presence_subscribe", self.on_auth_success)
         
@@ -37,6 +39,8 @@ class Client(sleekxmpp.ClientXMPP):
         self.register_plugin('xep_0050')
         self.register_plugin('xep_0133')
         self.register_plugin('xep_0045') # MUC
+        self.register_plugin('xep_0095')
+        self.register_plugin('xep_0096') # SI File Transfer
 
         # If you are working with an OpenFire server, you will
         # need to use a different SSL version:
@@ -56,7 +60,7 @@ class Client(sleekxmpp.ClientXMPP):
             contactjid = JID(contact)
             print("contact user", contactjid.user, contactjid, contactjid.domain)
             if (contactjid.bare not in self.my_contacts.keys()) and (contactjid.domain != "conference.redes2020.xyz") and (contactjid.bare != self.instance_name):
-                self.my_contacts[contactjid.bare] = "Offline"
+                self.my_contacts[contactjid.bare] = {'state': "Offline", 'fulljid': ""}
         # se verifica si algun usuario se eliminó y se actualiza la lista de acorde
         deleted_clients = []
         for mycontact in self.my_contacts.keys():
@@ -72,7 +76,7 @@ class Client(sleekxmpp.ClientXMPP):
             # parse del roster para obtener estado de los contactos 
             print("contacts in client roster", self.client_roster)
             for contact in self.client_roster.keys():
-                self.my_contacts[JID(contact).bare] = "Offline"
+                self.my_contacts[JID(contact).bare] = {'state': "Offline", 'fulljid': ""}
 
         except IqError as err:
             logging.error('There was an error getting the roster')
@@ -109,7 +113,7 @@ class Client(sleekxmpp.ClientXMPP):
         self.send_presence_subscription(contact_username)
 
     def get_my_contacts(self):
-        contacts_state = ["Username: {}, Estado: {}".format(username, state) for username,state in self.my_contacts.items()]
+        contacts_state = ["Username: {}, Estado: {}".format(username, self.my_contacts[username]["state"]) for username in self.my_contacts.keys()]
         to_str = '\n'
         for i in range(len(contacts_state)):
             to_str += "\t"+str(i+1)+". "+contacts_state[i]+"\n"
@@ -146,12 +150,16 @@ class Client(sleekxmpp.ClientXMPP):
     def contact_sign_out(self, event):
         contact = JID(event['from']).bare
         if contact in self.my_contacts.keys(): # se hace esto porque los eventos presence_unavailable también pueden venir del server
-            self.my_contacts[contact] = "Offline"
+            self.my_contacts[contact]['state'] = "Offline"
         
     def contact_sign_in(self, event):
         # print("resource?", event['from'].user, "from", event['from'])
         if event['from'].domain != "conference.redes2020.xyz" and event['from'].user != self.instance_name: # si el presence no viene de un group chat 
-            self.my_contacts[JID(event['from']).bare] = "Online"
+            try:
+                self.my_contacts[JID(event['from']).bare]['state'] = "Online" 
+                self.my_contacts[JID(event['from']).bare]['fulljid'] = event["from"] 
+            except KeyError:
+                self.my_contacts[JID(event['from']).bare] = {'state': 'Online', 'fulljid': event['from']}
 
     def on_failed_auth(self, event):
         print("auth fail event", event)
@@ -264,10 +272,31 @@ class Client(sleekxmpp.ClientXMPP):
         # self.plugin['xep_0045'].setAffiliation(room,nickname,affiliation='member')
     
     def send_file(self, filename, recipient):
-        message = ''
-        with open(filename, "rb") as img_file:
-            message = base64.b64encode(img_file.read()).decode('utf-8')
-        self.send_message(mto=recipient,mbody=message,mtype="chat")
+    # def send_file(self):
+        # message = ''
+        # with open(filename, "rb") as img_file:
+        #     message = base64.b64encode(img_file.read()).decode('utf-8')
+        # self.send_message(mto=recipient,mbody=message,mtype="chat")
+        print("contact list", self.my_contacts)
+        size = 80839
+        try: 
+            r_fulljid = self.my_contacts[recipient]["fulljid"]
+            if r_fulljid:
+                # self.plugin['xep_0096'].request_file_transfer(jid=str(r_fulljid), name=filename, mime_type="image/png", size=size, desc="ksdj", allow_ranged=True)
+                self.plugin['xep_0096'].request_file_transfer(JID(r_fulljid), name=filename, size=1024, sid="ibb_file_transfer", desc="ksdj", date="2020-09-19",  mime_type="image/png")
+            else:
+                print("El usuario ingresado no está conectado.")
+        except KeyError:
+            print("El usuario ingresado no está agregado a la lista de usuarios.")
+
+    def update_presence(self, new_status):
+        self.send_presence(
+            pshow="chat",
+            pstatus=new_status
+        )
+    def changed_status(self, event):
+        print("client roster", self.client_roster)
+        print("event info", event)
 
 def user_register(username, password):
     """ 
