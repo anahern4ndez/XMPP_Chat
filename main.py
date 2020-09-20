@@ -80,9 +80,9 @@ while True:
                     user_client.update_presence(new_status)
                 elif inop == "10":
                     recipient = input("Ingrese el usuario a recibir el archivo (SIN dominio): ")+"@redes2020.xyz"
-                    # filename = input("Ingrese nombre del archivo: ")
-                    filename = "./test_img.png"
-                    user_client.send_file(filename,recipient)
+                    # filename = input("Ingrese nombre del archivo (SIN extension): ")
+                    filename = "test_img.png"
+                    user_client.send_file_request(filename,recipient)
                     # user_client.send_file()
                 elif inop == "11":
                     # 100% funcional

@@ -22,6 +22,7 @@ class Client(sleekxmpp.ClientXMPP):
         self.latest_roster_version = -1
         self.my_contacts = {}
         self.contacts_jids = []
+        self.files_recv = []
 
         self.add_event_handler("session_start", self.session_start, threaded=False, disposable=True)
         self.add_event_handler("message", self.receive_message, threaded=True, disposable=False)
@@ -36,6 +37,9 @@ class Client(sleekxmpp.ClientXMPP):
         self.add_event_handler("si_request", self.file_transfer_req)
         # self.add_event_handler("presence_subscribed", self.added_contact) # server envia mensaje de add contact success
         # self.add_event_handler("presence_subscribe", self.on_auth_success)
+        self.add_event_handler("ibb_stream_start", self.stream_opened, threaded=True)
+        self.add_event_handler("ibb_stream_data", self.stream_data)
+        self.add_event_handler("ibb_stream_end", self.stream_end)
         
         # Registro de plugins 
         self.register_plugin('xep_0030') # Service Discovery
@@ -44,10 +48,9 @@ class Client(sleekxmpp.ClientXMPP):
         self.register_plugin('xep_0133')
         self.register_plugin('xep_0045') # MUC
         # file transfer
-        self.register_plugin('xep_0047') # In-band Bytestreams 
-        # , {
-        #     'auto_accept': True
-        # }
+        self.register_plugin('xep_0047' , {
+            'auto_accept': True
+        }) # In-band Bytestreams 
         self.register_plugin('xep_0065')
         self.register_plugin('xep_0020')
         self.register_plugin('xep_0095')
@@ -114,11 +117,11 @@ class Client(sleekxmpp.ClientXMPP):
             from_group = message["from"].user
             from_account = message["from"].resource
             print("Message received! %s @ %s : %s " % (from_account, from_group, message["body"]))
-        elif message['type'] == "image":
-            received = message['body'].encode('utf-8')
-            received = base64.decodebytes(received)
-            with open("received_img.png", "wb") as fh:
-                fh.write(received)
+        # elif message['type'] == "image":
+        #     received = message['body'].encode('utf-8')
+        #     received = base64.decodebytes(received)
+        #     with open("received_img.png", "wb") as fh:
+        #         fh.write(received)
 
     def add_contact(self, contact_username):
         self.send_presence_subscription(contact_username)
@@ -282,20 +285,25 @@ class Client(sleekxmpp.ClientXMPP):
         print("Joined rooms:", ", ".join(list(self.plugin['xep_0045'].getJoinedRooms())))
         # self.plugin['xep_0045'].setAffiliation(room,nickname,affiliation='member')
     
-    def send_file(self, filename, recipient, mime_type="image/png", allow_ranged=True):
-        size = 80839
-        # method_ls = [
-        #     {'value': SOCKS5},
-        #     {'value': IBB}
-        #     # (50, IBB, 'xep_0047'),
-        #     # (100, SOCKS5, 'xep_0065'),
-        # ]
+    def send_file_request(self, filename, recipient, mime_type="image/png", size=80839, description = 'Descripción genérica de una imagen a transferir.', file_date ="2020-09-19"):
         try: 
             r_fulljid = self.my_contacts[recipient]["fulljid"]
             if r_fulljid:
-                response = self.plugin['xep_0096'].request_file_transfer(r_fulljid, name=filename, size=size, sid="ibb_file_transfer",\
-                    desc="ksdj", date="2020-09-19",  mime_type="image/png")
-                print("client response to file transf", response)
+                response = self.plugin['xep_0096'].request_file_transfer(
+                    r_fulljid, 
+                    name=filename, 
+                    size=size, 
+                    sid="ibb_file_transfer",
+                    desc= description, 
+                    date=file_date, 
+                    mime_type=mime_type)
+                # print("client response to file transf", response)
+                # try:
+                metodo = response['si']['feature_neg']['form']['field']['option']['value']
+                print("INFO: Recipiente ha aceptado la solicitud de transferencia de archivos. Método:", metodo)
+                self.send_file(filename, r_fulljid, mime_type)
+                # except:
+                #     print("ERROR: no se pudo realizar la transferencia de archivos.")
             else:
                 print("El usuario ingresado no está conectado.")
         except KeyError:
@@ -305,9 +313,64 @@ class Client(sleekxmpp.ClientXMPP):
         except IqTimeout:
             print("ERROR: Server took too long to respond.")
 
+    
     def file_transfer_req(self, event):
         print("file transf event", event)
-        self.plugin['xep_0095'].accept(event['from'], event['si']['id'])
+        # print('tryin data', event['si']['file_transfer'])
+        # print('tryin data2', event['si']['file'].keys())
+        # print('tryin data3', event['si'].keys())
+        self.files_recv.append({
+            "file_name": event['si']['file']['name'],
+            "mime_type": event['si']['mime_type'],
+            "file_size": event['si']['file']['size'],
+            "data": b""
+        })
+        print("files recv", self.files_recv)
+        self.plugin['xep_0095'].accept(event['from'], event['si']['id']) # responder un accept para el request 
+    
+    def stream_opened(self, stream):
+        print('Stream abierto: %s from %s' % (stream.sid, stream.peer_jid))
+
+    def stream_data(self, event):
+        # asumiendo que los archivos se enviarán en orden y entre parejas de clientes a la vez
+        # print("event keys", event.keys(), event['stream'].keys())
+        # if event['data']['seq']
+        self.files_recv[len(self.files_recv)-1]['data'] += event['data']
+        # print(event['data'])
+
+    def send_file(self, filename, receiver, mime_type):
+        stream = self.plugin['xep_0047'].open_stream(receiver)
+
+        try:
+            filename.split(".")[1] # se prueba si el archivo viene con extension
+        except IndexError: # si tira error es porque el nombre del archivo no tenia extension
+            filename = filename + '.' + mime_type.split("/")[1]
+        with open(filename, 'rb') as f:
+            data = f.read()
+            stream.sendall(base64.b64encode(data).decode('utf-8'))
+        stream.close()
+
+    def stream_end(self, event):
+        try:
+            # al obtener el evento, se consolida la informacion obtenida y se guarda en un archivo
+            # solo funciona si es el receptor, pero este evento sucede en tanto receptor como emisor
+            print("files recv on streamend", self.files_recv, 'obj', len(self.files_recv))
+            # file = self.files_recv[len(self.files_recv) -1]
+            file = self.files_recv.pop()
+            file_data = base64.decodebytes(file['data'])
+            try:
+                file["file_name"].split(".")[1] # se prueba si el archivo viene con extension
+                filename = file["file_name"]
+            except IndexError: # si tira error es porque el nombre del archivo no tenia extension
+                filename = 'files_received/' + file['file_name'] + "." + file['mime_type'].split('/')[1]
+            with open(filename, "wb") as fh:
+                fh.write(file_data)
+            # se elimina el objeto de la lista de recibidos
+            # self.files_recv.pop()
+        except IndexError as err:
+            print("Index error:", err)
+            pass
+        
 
     def update_presence(self, new_status):
         self.send_presence(
