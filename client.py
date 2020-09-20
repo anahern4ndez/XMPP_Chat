@@ -8,7 +8,10 @@ import xml.etree.ElementTree as ET
 from sleekxmpp.xmlstream.stanzabase import multifactory, ElementBase
 from sleekxmpp.xmlstream.tostring import tostring
 import base64
+from sleekxmpp.plugins.xep_0096 import stanza, File
 
+SOCKS5 = 'http://jabber.org/protocol/bytestreams'
+IBB = 'http://jabber.org/protocol/ibb'
 
 class Client(sleekxmpp.ClientXMPP):
 
@@ -39,6 +42,10 @@ class Client(sleekxmpp.ClientXMPP):
         self.register_plugin('xep_0050')
         self.register_plugin('xep_0133')
         self.register_plugin('xep_0045') # MUC
+        # file transfer
+        self.register_plugin('xep_0047')
+        self.register_plugin('xep_0065')
+        self.register_plugin('xep_0020')
         self.register_plugin('xep_0095')
         self.register_plugin('xep_0096') # SI File Transfer
 
@@ -271,23 +278,25 @@ class Client(sleekxmpp.ClientXMPP):
         print("Joined rooms:", ", ".join(list(self.plugin['xep_0045'].getJoinedRooms())))
         # self.plugin['xep_0045'].setAffiliation(room,nickname,affiliation='member')
     
-    def send_file(self, filename, recipient):
-    # def send_file(self):
-        # message = ''
-        # with open(filename, "rb") as img_file:
-        #     message = base64.b64encode(img_file.read()).decode('utf-8')
-        # self.send_message(mto=recipient,mbody=message,mtype="chat")
-        print("contact list", self.my_contacts)
+    def send_file(self, filename, recipient, mime_type="image/png", allow_ranged=True):
         size = 80839
+        method_ls = [
+            {'value': SOCKS5},
+            {'value': IBB}
+            # (50, IBB, 'xep_0047'),
+            # (100, SOCKS5, 'xep_0065'),
+        ]
         try: 
             r_fulljid = self.my_contacts[recipient]["fulljid"]
             if r_fulljid:
-                # self.plugin['xep_0096'].request_file_transfer(jid=str(r_fulljid), name=filename, mime_type="image/png", size=size, desc="ksdj", allow_ranged=True)
-                self.plugin['xep_0096'].request_file_transfer(JID(r_fulljid), name=filename, size=1024, sid="ibb_file_transfer", desc="ksdj", date="2020-09-19",  mime_type="image/png")
+                self.plugin['xep_0096'].request_file_transfer(r_fulljid, name=filename, size=size, sid="ibb_file_transfer",\
+                    desc="ksdj", date="2020-09-19",  mime_type="image/png", methods=method_ls)
             else:
                 print("El usuario ingresado no está conectado.")
         except KeyError:
             print("El usuario ingresado no está agregado a la lista de usuarios.")
+        except IqError as err:
+            print("ERROR: ", err.iq['error']['text'])
 
     def update_presence(self, new_status):
         self.send_presence(
