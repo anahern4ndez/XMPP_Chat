@@ -18,7 +18,7 @@ class Client(sleekxmpp.ClientXMPP):
     def __init__(self, jid, password):
         sleekxmpp.ClientXMPP.__init__(self, jid, password)
         self.logged_in = -1
-        self.instance_name = jid
+        self.instance_name = JID(jid).bare
         self.latest_roster_version = -1
         self.my_contacts = {}
         self.contacts_jids = []
@@ -27,11 +27,11 @@ class Client(sleekxmpp.ClientXMPP):
         self.add_event_handler("session_start", self.session_start, threaded=False, disposable=True)
         self.add_event_handler("message", self.receive_message, threaded=True, disposable=False)
         self.add_event_handler("failed_auth", self.on_failed_auth)
-        self.add_event_handler("auth_success", self.on_auth_success)
+        # self.add_event_handler("auth_success", self.on_auth_success)
         self.add_event_handler("got_offline", self.contact_sign_out)
         self.add_event_handler("presence_unavailable", self.contact_sign_out)
         self.add_event_handler("got_online", self.contact_sign_in)
-        self.add_event_handler("groupchat_message", self.receive_message)
+        # self.add_event_handler("groupchat_message", self.receive_message)
         self.add_event_handler("roster_update", self.roster_update)
         self.add_event_handler("changed_status", self.changed_status)
         self.add_event_handler("si_request", self.file_transfer_req)
@@ -40,6 +40,7 @@ class Client(sleekxmpp.ClientXMPP):
         self.add_event_handler("ibb_stream_start", self.stream_opened, threaded=True)
         self.add_event_handler("ibb_stream_data", self.stream_data)
         self.add_event_handler("ibb_stream_end", self.stream_end)
+        self.add_event_handler("groupchat_presence", self.groupchat_notif)
         
         # Registro de plugins 
         self.register_plugin('xep_0030') # Service Discovery
@@ -67,14 +68,12 @@ class Client(sleekxmpp.ClientXMPP):
             raise Exception("Unable to connect to server.")
     
     def roster_update(self, event):
-        print("contacts in client roster", self.client_roster)
+        # print("contacts in client roster", self.client_roster)
         # se agrega un usuario que no estaba en mis contactos
         for contact in self.client_roster.keys():
-            # if event['from'].user != "@conference.redes2020.xyz" and event['from'].user != self.instance_name:
             contactjid = JID(contact)
-            # print("contact user", contactjid.user, contactjid, contactjid.domain)
-            if (contactjid.bare not in self.my_contacts.keys()) and (contactjid.domain != "conference.redes2020.xyz") and (contactjid.bare != self.instance_name):
-                self.my_contacts[contactjid.bare] = {'state': "Offline", 'fulljid': ""}
+            if (contactjid.bare not in self.my_contacts.keys()) and (contactjid.domain != "conference.redes2020.xyz"):
+                self.my_contacts[contactjid.bare] = {'state': "Offline", 'fulljid': "", 'status_msg': ''}
         # se verifica si algun usuario se eliminó y se actualiza la lista de acorde
         deleted_clients = []
         for mycontact in self.my_contacts.keys():
@@ -88,9 +87,12 @@ class Client(sleekxmpp.ClientXMPP):
             self.send_presence()
             self.get_roster(block = True, timeout = 5)
             # parse del roster para obtener estado de los contactos 
-            print("contacts in client roster", self.client_roster)
+            # print("contacts in client roster", self.client_roster)
             for contact in self.client_roster.keys():
-                self.my_contacts[JID(contact).bare] = {'state': "Offline", 'fulljid': ""}
+                self.my_contacts[JID(contact).bare] = {'state': "Offline", 'fulljid': "", 'status_msg': ''}
+            # print("Joined rooms:", ", ".join(list(self.plugin['xep_0045'].getJoinedRooms())))
+            self.logged_in = 0
+            
 
         except IqError as err:
             logging.error('There was an error getting the roster')
@@ -117,17 +119,16 @@ class Client(sleekxmpp.ClientXMPP):
             from_group = message["from"].user
             from_account = message["from"].resource
             print("Message received! %s @ %s : %s " % (from_account, from_group, message["body"]))
-        # elif message['type'] == "image":
-        #     received = message['body'].encode('utf-8')
-        #     received = base64.decodebytes(received)
-        #     with open("received_img.png", "wb") as fh:
-        #         fh.write(received)
 
     def add_contact(self, contact_username):
         self.send_presence_subscription(contact_username)
 
     def get_my_contacts(self):
-        contacts_state = ["Username: {}, Estado: {}".format(username, self.my_contacts[username]["state"]) for username in self.my_contacts.keys()]
+        contacts_state = [
+            "Username: {}, Estado: {}".format(username, self.my_contacts[username]["state"]) if not self.my_contacts[username]["status_msg"] \
+                else "Username: {}, Estado: {}, Mensaje: {}".format(username, self.my_contacts[username]["state"], self.my_contacts[username]["status_msg"])\
+                    for username in self.my_contacts.keys()
+        ]
         to_str = '\n'
         for i in range(len(contacts_state)):
             to_str += "\t"+str(i+1)+". "+contacts_state[i]+"\n"
@@ -165,22 +166,25 @@ class Client(sleekxmpp.ClientXMPP):
         contact = JID(event['from']).bare
         if contact in self.my_contacts.keys(): # se hace esto porque los eventos presence_unavailable también pueden venir del server
             self.my_contacts[contact]['state'] = "Offline"
+            print("INFO: {} se ha desconectado.".format(contact))
         
     def contact_sign_in(self, event):
         # print("resource?", event['from'].user, "from", event['from'])
-        if event['from'].domain != "conference.redes2020.xyz" and event['from'].user != self.instance_name: # si el presence no viene de un group chat 
+        if event['from'].domain != "conference.redes2020.xyz" and event['from'] != self.instance_name: # si el presence no viene de un group chat 
             try:
                 self.my_contacts[JID(event['from']).bare]['state'] = "Online" 
                 self.my_contacts[JID(event['from']).bare]['fulljid'] = event["from"] 
+                self.my_contacts[JID(event['from']).bare]['status_msg'] = ''
             except KeyError:
-                self.my_contacts[JID(event['from']).bare] = {'state': 'Online', 'fulljid': event['from']}
+                self.my_contacts[JID(event['from']).bare] = {'state': 'Online', 'fulljid': event['from'], 'status_msg': ''}
+            print("INFO: {} se ha conectado.".format(JID(event['from']).bare))
 
     def on_failed_auth(self, event):
         print("auth fail event", event)
         self.logged_in = 1
 
-    def on_auth_success(self, event):
-        self.logged_in = 0
+    # def on_auth_success(self, event):
+    #     # self.logged_in = 0
     
     def get_all_users(self):
         users = ""
@@ -278,12 +282,12 @@ class Client(sleekxmpp.ClientXMPP):
     def join_group(self, room, nickname=None):
         if not nickname:
             nickname = self.instance_name.split("@")[0]
-        self.plugin['xep_0045'].joinMUC(room, nickname, wait=True)
+        status = self.my_contacts[self.instance_name]['status_msg']
+        self.plugin['xep_0045'].joinMUC(room, nickname, wait=True, pstatus=status if status else None)
         if room not in self.plugin['xep_0045'].getJoinedRooms():
             print("Failed to join room.")
             return
         print("Joined rooms:", ", ".join(list(self.plugin['xep_0045'].getJoinedRooms())))
-        # self.plugin['xep_0045'].setAffiliation(room,nickname,affiliation='member')
     
     def send_file_request(self, filename, recipient, mime_type="image/png", size=80839, description = 'Descripción genérica de una imagen a transferir.', file_date ="2020-09-19"):
         try: 
@@ -298,16 +302,17 @@ class Client(sleekxmpp.ClientXMPP):
                     date=file_date, 
                     mime_type=mime_type)
                 # print("client response to file transf", response)
-                # try:
-                metodo = response['si']['feature_neg']['form']['field']['option']['value']
-                print("INFO: Recipiente ha aceptado la solicitud de transferencia de archivos. Método:", metodo)
-                self.send_file(filename, r_fulljid, mime_type)
-                # except:
-                #     print("ERROR: no se pudo realizar la transferencia de archivos.")
+                try:
+                    metodo = response['si']['feature_neg']['form']['field']['value']
+                    # print('response keys', response['si']['feature_neg']['form']['field']['option'].keys(), response['si']['feature_neg']['form']['field'].keys())
+                    print("INFO: Recipiente ha aceptado la solicitud de transferencia de archivos. Método:", metodo)
+                    self.send_file(filename, r_fulljid, mime_type)
+                except:
+                    print("ERROR: no se pudo realizar la transferencia de archivos.")
             else:
                 print("El usuario ingresado no está conectado.")
         except KeyError:
-            print("El usuario ingresado no está agregado a la lista de usuarios.")
+            print("El usuario ingresado no está agregado a la lista de contactos.")
         except IqError as err:
             print("ERROR: ", err.iq['error']['text'])
         except IqTimeout:
@@ -315,17 +320,13 @@ class Client(sleekxmpp.ClientXMPP):
 
     
     def file_transfer_req(self, event):
-        print("file transf event", event)
-        # print('tryin data', event['si']['file_transfer'])
-        # print('tryin data2', event['si']['file'].keys())
-        # print('tryin data3', event['si'].keys())
+        # print("file transf event", event)
         self.files_recv.append({
             "file_name": event['si']['file']['name'],
             "mime_type": event['si']['mime_type'],
             "file_size": event['si']['file']['size'],
             "data": b""
         })
-        print("files recv", self.files_recv)
         self.plugin['xep_0095'].accept(event['from'], event['si']['id']) # responder un accept para el request 
     
     def stream_opened(self, stream):
@@ -333,10 +334,7 @@ class Client(sleekxmpp.ClientXMPP):
 
     def stream_data(self, event):
         # asumiendo que los archivos se enviarán en orden y entre parejas de clientes a la vez
-        # print("event keys", event.keys(), event['stream'].keys())
-        # if event['data']['seq']
         self.files_recv[len(self.files_recv)-1]['data'] += event['data']
-        # print(event['data'])
 
     def send_file(self, filename, receiver, mime_type):
         stream = self.plugin['xep_0047'].open_stream(receiver)
@@ -349,26 +347,24 @@ class Client(sleekxmpp.ClientXMPP):
             data = f.read()
             stream.sendall(base64.b64encode(data).decode('utf-8'))
         stream.close()
+        print("INFO: Archivo enviado!")
 
     def stream_end(self, event):
         try:
             # al obtener el evento, se consolida la informacion obtenida y se guarda en un archivo
-            # solo funciona si es el receptor, pero este evento sucede en tanto receptor como emisor
-            print("files recv on streamend", self.files_recv, 'obj', len(self.files_recv))
-            # file = self.files_recv[len(self.files_recv) -1]
+            # solo funciona si es el receptor, pero este evento sucede en tanto receptor como emisor, por eso el try except
             file = self.files_recv.pop()
             file_data = base64.decodebytes(file['data'])
             try:
                 file["file_name"].split(".")[1] # se prueba si el archivo viene con extension
-                filename = file["file_name"]
+                filename = 'files_received/' + file["file_name"]    
             except IndexError: # si tira error es porque el nombre del archivo no tenia extension
                 filename = 'files_received/' + file['file_name'] + "." + file['mime_type'].split('/')[1]
             with open(filename, "wb") as fh:
                 fh.write(file_data)
-            # se elimina el objeto de la lista de recibidos
-            # self.files_recv.pop()
+            print("INFO: Archivo recibido!")
         except IndexError as err:
-            print("Index error:", err)
+            # print("Index error:", err)
             pass
         
 
@@ -377,16 +373,27 @@ class Client(sleekxmpp.ClientXMPP):
             pshow="chat",
             pstatus=new_status
         )
+    def groupchat_notif(self, event):
+        # print("groupchat presence data", event, event.keys())
+        new_usr = JID(event['from']).resource
+        status = event['status']
+        group = JID(event['from']).user
+        notice = "INFO: {} ha ingresado al chat de {}.".format(new_usr, group)
+        notice = notice + " Mensaje de ingreso: {}".format(status) if status else notice
+        print(notice)
+        
     def changed_status(self, event):
-        print("client roster", self.client_roster)
-        print("event info", event)
+        from_usr = JID(event['from'])
+        if event['status'] and from_usr.domain != 'conference.redes2020.xyz': # si el mensaje de presencia trae un estado, realizar el cambio y la notificacion
+            self.my_contacts[from_usr.bare]['status_msg'] = event['status']
+            print("INFO: {} ha cambiado el mensaje de su estado a '{}'".format(from_usr.user, event['status']))
 
 def user_register(username, password):
     """ 
         User Register 
     """
     jid = xmpp.JID(username)
-    xmpp_cli = xmpp.Client(jid.getDomain())
+    xmpp_cli = xmpp.Client(jid.getDomain(), debug=['never'])
     xmpp_cli.connect()
     if xmpp.features.register(xmpp_cli,jid.getDomain(),{'username':jid.getNode(),'password':password}):
         print('Successfully registered new user. \n')
