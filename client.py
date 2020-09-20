@@ -33,17 +33,21 @@ class Client(sleekxmpp.ClientXMPP):
         self.add_event_handler("groupchat_message", self.receive_message)
         self.add_event_handler("roster_update", self.roster_update)
         self.add_event_handler("changed_status", self.changed_status)
+        self.add_event_handler("si_request", self.file_transfer_req)
         # self.add_event_handler("presence_subscribed", self.added_contact) # server envia mensaje de add contact success
         # self.add_event_handler("presence_subscribe", self.on_auth_success)
         
-        # If you wanted more functionality, here's how to register plugins:
+        # Registro de plugins 
         self.register_plugin('xep_0030') # Service Discovery
         self.register_plugin('xep_0199') # XMPP Ping
         self.register_plugin('xep_0050')
         self.register_plugin('xep_0133')
         self.register_plugin('xep_0045') # MUC
         # file transfer
-        self.register_plugin('xep_0047')
+        self.register_plugin('xep_0047') # In-band Bytestreams 
+        # , {
+        #     'auto_accept': True
+        # }
         self.register_plugin('xep_0065')
         self.register_plugin('xep_0020')
         self.register_plugin('xep_0095')
@@ -65,7 +69,7 @@ class Client(sleekxmpp.ClientXMPP):
         for contact in self.client_roster.keys():
             # if event['from'].user != "@conference.redes2020.xyz" and event['from'].user != self.instance_name:
             contactjid = JID(contact)
-            print("contact user", contactjid.user, contactjid, contactjid.domain)
+            # print("contact user", contactjid.user, contactjid, contactjid.domain)
             if (contactjid.bare not in self.my_contacts.keys()) and (contactjid.domain != "conference.redes2020.xyz") and (contactjid.bare != self.instance_name):
                 self.my_contacts[contactjid.bare] = {'state': "Offline", 'fulljid': ""}
         # se verifica si algun usuario se eliminó y se actualiza la lista de acorde
@@ -280,23 +284,30 @@ class Client(sleekxmpp.ClientXMPP):
     
     def send_file(self, filename, recipient, mime_type="image/png", allow_ranged=True):
         size = 80839
-        method_ls = [
-            {'value': SOCKS5},
-            {'value': IBB}
-            # (50, IBB, 'xep_0047'),
-            # (100, SOCKS5, 'xep_0065'),
-        ]
+        # method_ls = [
+        #     {'value': SOCKS5},
+        #     {'value': IBB}
+        #     # (50, IBB, 'xep_0047'),
+        #     # (100, SOCKS5, 'xep_0065'),
+        # ]
         try: 
             r_fulljid = self.my_contacts[recipient]["fulljid"]
             if r_fulljid:
-                self.plugin['xep_0096'].request_file_transfer(r_fulljid, name=filename, size=size, sid="ibb_file_transfer",\
-                    desc="ksdj", date="2020-09-19",  mime_type="image/png", methods=method_ls)
+                response = self.plugin['xep_0096'].request_file_transfer(r_fulljid, name=filename, size=size, sid="ibb_file_transfer",\
+                    desc="ksdj", date="2020-09-19",  mime_type="image/png")
+                print("client response to file transf", response)
             else:
                 print("El usuario ingresado no está conectado.")
         except KeyError:
             print("El usuario ingresado no está agregado a la lista de usuarios.")
         except IqError as err:
             print("ERROR: ", err.iq['error']['text'])
+        except IqTimeout:
+            print("ERROR: Server took too long to respond.")
+
+    def file_transfer_req(self, event):
+        print("file transf event", event)
+        self.plugin['xep_0095'].accept(event['from'], event['si']['id'])
 
     def update_presence(self, new_status):
         self.send_presence(
