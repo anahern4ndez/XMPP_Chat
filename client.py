@@ -289,7 +289,7 @@ class Client(sleekxmpp.ClientXMPP):
             return
         print("Joined rooms:", ", ".join(list(self.plugin['xep_0045'].getJoinedRooms())))
     
-    def send_file_request(self, filename, recipient, mime_type="image/png", size=80839, description = 'Descripción genérica de una imagen a transferir.', file_date ="2020-09-19"):
+    def send_file_request(self, filename, recipient, mime_type="image/png", size=1024, description = 'Descripción genérica de una imagen a transferir.', file_date = None):
         try: 
             r_fulljid = self.my_contacts[recipient]["fulljid"]
             if r_fulljid:
@@ -355,11 +355,13 @@ class Client(sleekxmpp.ClientXMPP):
             # solo funciona si es el receptor, pero este evento sucede en tanto receptor como emisor, por eso el try except
             file = self.files_recv.pop()
             file_data = base64.decodebytes(file['data'])
+            name_only = file["file_name"].split("/") # es posible que el nombre del archivo venga con el path absoluto o solo venga el nombre
+            name_only = name_only[len(name_only) -1] # por lo que se procura de obtener unicamente el nombre del path
             try:
-                file["file_name"].split(".")[1] # se prueba si el archivo viene con extension
-                filename = 'files_received/' + file["file_name"]    
+                name_only.split(".")[1] # se prueba si el archivo viene con extension
+                filename = 'files_received/' + name_only
             except IndexError: # si tira error es porque el nombre del archivo no tenia extension
-                filename = 'files_received/' + file['file_name'] + "." + file['mime_type'].split('/')[1]
+                filename = 'files_received/' + name_only + "." + file['mime_type'].split('/')[1]
             with open(filename, "wb") as fh:
                 fh.write(file_data)
             print("INFO: Archivo recibido!")

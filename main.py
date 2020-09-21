@@ -1,4 +1,7 @@
 from client import *
+from pathlib import Path
+from tkinter import *
+from tkinter import filedialog
 
 
 # # Ideally use optparse or argparse to get JID,
@@ -74,9 +77,36 @@ while True:
                     user_client.update_presence(new_status)
                 elif inop == "9":
                     recipient = input("Ingrese el usuario a recibir el archivo (SIN dominio): ")+"@redes2020.xyz"
-                    filename = input("Ingrese nombre del archivo (SIN extension): ")
-                    # filename = "test_img.png"
-                    user_client.send_file_request(filename,recipient)
+                    # filename = input("Ingrese nombre del archivo (SIN extension): ")
+                    window = Tk()
+                    window.withdraw()
+                    allowed_formats = {
+                        "csv": { 'mime': 'text/csv', 'tuple': ("CSV files", "*.csv")},
+                        "txt": { 'mime': 'text/plain', 'tuple': ("Text files", "*.txt")},
+                        "png": { 'mime': 'image/png', 'tuple': ("PNG files", "*.png")},
+                        "jpeg": { 'mime': 'image/jpeg', 'tuple': ("Jpeg files", "*.jpeg")},
+                        "jpeg": { 'mime': 'image/jpeg', 'tuple': ("Jpg files", "*.jpg")},
+                        "pdf": { 'mime': 'application/pd', 'tuple': ("PDF files", "*.pdf")}
+                    }
+                    a, b, c, d, e = [value["tuple"] for key, value in allowed_formats.items()]
+                    window.update()
+                    fullpath = filedialog.askopenfilename(initialdir = ".", 
+                        title = "Select a File",
+                        filetypes = (a,b,c,d,e)) 
+
+                    file_info = Path(fullpath).stat()
+                    size = file_info.st_size
+                    # created_at = file_info.st_birthtime
+                    path_dirs = fullpath.split('/')
+                    name = path_dirs[len(path_dirs) -1]
+                    try:
+                        file_type = name.split(".")[1]
+                        print("File attributes: \n\tName: {}, size: {} bytes, type: {}".format(name, size, file_type))
+                        # filename = "test_img.png"
+                    except IndexError:
+                        print("El archivo seleccionado debe tener la extensión en su nombre.")
+                        continue
+                    user_client.send_file_request(fullpath,recipient, mime_type=allowed_formats[file_type]['mime'], size = size)
                 elif inop == "10":
                     user_client.delete_user()
                     user_client.disconnect_user()
