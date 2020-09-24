@@ -33,7 +33,7 @@ Este proyecto requiere la previa instalación de python>=3.8 y pip>=20.2.2. Adic
 ### Instalación
 
 1. Clona este repositorio utilizando `https://github.com/her17138/XMPP_Chat.git`
-2. Corre el comando `pip install -r requirements.txt` para instalar las librerías necesarias con sus versiones respectivas para que este proyecto funcione.
+2. Corre el comando `pip install -r requirements.txt` para instalar las librerías necesarias con sus versiones respectivas para que este proyecto funcione (si ocurre algún error con tkinter solamente correr `pip install tkinter`.
 3. Corre el comando `python3 main.py` para correr la implementación de un cliente con el protocolo XMPP.
 
 ## Estructura del proyecto 
