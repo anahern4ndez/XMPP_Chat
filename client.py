@@ -108,17 +108,17 @@ class Client(sleekxmpp.ClientXMPP):
         message['type'] = 'chat'
         message['body'] = body
 
-        print("Sending message '%s' to %s" % (body, recipient))
+        print("Enviando mensaje '%s' a %s" % (body, recipient))
         message.send()
 
     def receive_message(self, message):
         if message['type'] in ('chat', 'normal'):
             from_account = "%s@%s" % (message['from'].user, message['from'].domain)
-            print("Message received '%s' from %s" % (message["body"], from_account))
+            print("NOTIFICACION: Mensaje recibido! '%s' de %s" % (message["body"], from_account))
         elif message['type'] == 'groupchat':
             from_group = message["from"].user
             from_account = message["from"].resource
-            print("Message received! %s @ %s : %s " % (from_account, from_group, message["body"]))
+            print("NOTIFICACION: Mensaje recibido! %s @ %s : %s " % (from_account, from_group, message["body"]))
 
     def add_contact(self, contact_username):
         self.send_presence_subscription(contact_username)
@@ -166,7 +166,7 @@ class Client(sleekxmpp.ClientXMPP):
         contact = JID(event['from']).bare
         if contact in self.my_contacts.keys(): # se hace esto porque los eventos presence_unavailable también pueden venir del server
             self.my_contacts[contact]['state'] = "Offline"
-            print("INFO: {} se ha desconectado.".format(contact))
+            print("NOTIFICACION: {} se ha desconectado.".format(contact))
         
     def contact_sign_in(self, event):
         # print("resource?", event['from'].user, "from", event['from'])
@@ -177,7 +177,7 @@ class Client(sleekxmpp.ClientXMPP):
                 self.my_contacts[JID(event['from']).bare]['status_msg'] = ''
             except KeyError:
                 self.my_contacts[JID(event['from']).bare] = {'state': 'Online', 'fulljid': event['from'], 'status_msg': ''}
-            print("INFO: {} se ha conectado.".format(JID(event['from']).bare))
+            print("NOTIFICACION: {} se ha conectado.".format(JID(event['from']).bare))
 
     def on_failed_auth(self, event):
         print("auth fail event", event)
@@ -287,7 +287,7 @@ class Client(sleekxmpp.ClientXMPP):
         if room not in self.plugin['xep_0045'].getJoinedRooms():
             print("Failed to join room.")
             return
-        print("Joined rooms:", ", ".join(list(self.plugin['xep_0045'].getJoinedRooms())))
+        print("Chats grupales registrados:", ", ".join(list(self.plugin['xep_0045'].getJoinedRooms())))
     
     def send_file_request(self, filename, recipient, mime_type="image/png", size=1024, description = 'Descripción genérica de una imagen a transferir.', file_date = None):
         try: 
@@ -371,6 +371,7 @@ class Client(sleekxmpp.ClientXMPP):
         
 
     def update_presence(self, new_status):
+        # se envía una notificación a todos los demás de mi roster que he cambiado mi mensaje de estado.
         self.send_presence(
             pshow="chat",
             pstatus=new_status
@@ -380,7 +381,7 @@ class Client(sleekxmpp.ClientXMPP):
         new_usr = JID(event['from']).resource
         status = event['status']
         group = JID(event['from']).user
-        notice = "INFO: {} ha ingresado al chat de {}.".format(new_usr, group)
+        notice = "NOTIFICACION: {} ha ingresado al chat de {}.".format(new_usr, group)
         notice = notice + " Mensaje de ingreso: {}".format(status) if status else notice
         print(notice)
         
@@ -388,7 +389,7 @@ class Client(sleekxmpp.ClientXMPP):
         from_usr = JID(event['from'])
         if event['status'] and from_usr.domain != 'conference.redes2020.xyz': # si el mensaje de presencia trae un estado, realizar el cambio y la notificacion
             self.my_contacts[from_usr.bare]['status_msg'] = event['status']
-            print("INFO: {} ha cambiado el mensaje de su estado a '{}'".format(from_usr.user, event['status']))
+            print("NOTIFICACION: {} ha cambiado el mensaje de su estado a '{}'".format(from_usr.user, event['status']))
 
 def user_register(username, password):
     """ 
@@ -398,9 +399,9 @@ def user_register(username, password):
     xmpp_cli = xmpp.Client(jid.getDomain(), debug=['never'])
     xmpp_cli.connect()
     if xmpp.features.register(xmpp_cli,jid.getDomain(),{'username':jid.getNode(),'password':password}):
-        print('Successfully registered new user. \n')
+        print('El usuario se ha registrado exitosamente. \n')
     else:
-        print('Error registering user.\n')
+        print('Ocurrió un error registrando al usuario.\n')
 
 def user_login(username, password):
 
