@@ -80,23 +80,23 @@ while True:
                     # filename = input("Ingrese nombre del archivo (SIN extension): ")
                     window = Tk()
                     window.withdraw()
-                    allowed_formats = {
+                    allowed_formats = { # solo este tipo de archivos se pueden enviar, otro tipo de multimedia no está testeado
                         "csv": { 'mime': 'text/csv', 'tuple': ("CSV files", "*.csv")},
                         "txt": { 'mime': 'text/plain', 'tuple': ("Text files", "*.txt")},
                         "png": { 'mime': 'image/png', 'tuple': ("PNG files", "*.png")},
                         "jpeg": { 'mime': 'image/jpeg', 'tuple': ("Jpeg files", "*.jpeg")},
                         "jpeg": { 'mime': 'image/jpeg', 'tuple': ("Jpg files", "*.jpg")},
                         "pdf": { 'mime': 'application/pd', 'tuple': ("PDF files", "*.pdf")}
-                    }
+                    } # de preferencia, que también se reciban archivos de este tipo
                     a, b, c, d, e = [value["tuple"] for key, value in allowed_formats.items()]
                     window.update()
                     fullpath = filedialog.askopenfilename(initialdir = ".", 
                         title = "Select a File",
                         filetypes = (a,b,c,d,e)) 
 
+                    # obtención de información del archivo
                     file_info = Path(fullpath).stat()
                     size = file_info.st_size
-                    # created_at = file_info.st_birthtime
                     path_dirs = fullpath.split('/')
                     name = path_dirs[len(path_dirs) -1]
                     try:
@@ -106,7 +106,7 @@ while True:
                     except IndexError:
                         print("El archivo seleccionado debe tener la extensión en su nombre.")
                         continue
-                    user_client.send_file_request(fullpath,recipient, mime_type=allowed_formats[file_type]['mime'], size = size)
+                    user_client.send_file_request(fullpath,recipient, mime_type=allowed_formats[file_type]['mime'], size = size) # comenzar el envío de archivo
                 elif inop == "10":
                     user_client.delete_user()
                     user_client.disconnect_user()
