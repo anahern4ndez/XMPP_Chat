@@ -118,11 +118,11 @@ For this case it is assumed that the credentials (username, password) used for t
 
 When a user wishes to sign/log in, after entering its credentials, it is made known to the user (through a print) that their data is being verified. When an auth_success is received, the user is logged in correctly and is then shown the main menu containing the options to execute features #1-9 and #11-12. Otherwise - in the case of an auth_fail, the user has not logged in correctly, access is denied and has to sign in again. 
 
-Should any of the following errores appear when an incorrect sign in is done:
+Should any of the following errors appear when an incorrect sign in is done:
 - ERROR    No appropriate login method.
 - ERROR    Error reading from XML stream.
 
-No need to worry, these errores don't affect the client's run. However if its proving to be troublesome, exit the program and run it again and log in with the correct credentials. Be noted that when these errors appear, in a few tests it showed to keep other features from functioning correctly (it appeared to happen randomly), so it is recommended to exit and rerun the program if an incorrect sign in is made. 
+No need to worry, these errors don't affect the client's run. However if its proving to be troublesome, exit the program and run it again and log in with the correct credentials. Be noted that when these errors appear, in a few tests it showed to keep other features from functioning correctly (it appeared to happen randomly), so it is recommended to exit and rerun the program if an incorrect sign in is made. 
 
 ## Features
 - 🐍 Python — Programming language used. 
